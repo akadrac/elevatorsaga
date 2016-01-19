@@ -1,55 +1,74 @@
 {
   init: function(elevators, floors) {
+    var maxFloor = floors.length - 1;
+    var num = 0;
+    var q = [];
 
-    function sortQueueAndRoute(elevator) {
-      if (elevator.destinationDirection() == "up") {
-        elevator.destinationQueue.sort(function(a, b){return a-b});
-      } else {
+    function sortQueue(elevator) {
+      elevator.destinationQueue.sort(function(a, b){return a-b});
+      if (elevator.currentFloor() > elevator.destinationQueue[0]) {
         elevator.destinationQueue.sort(function(a, b){return b-a});
+      }
+    }
+
+    function assignFloor(elevator, floorNum, force) {
+      if (elevator.destinationQueue.indexOf(floorNum) < 0) {
+        if (force) {
+          elevator.destinationQueue.unshift(floorNum);
+        } else {
+          elevator.destinationQueue.push(floorNum);
+          sortQueue(elevator);
+        }
       }
       elevator.checkDestinationQueue();
     }
 
-    function assignFloor(elevator, floorNum) {
-      elevator.goToFloor(floorNum, true);
-      sortQueueAndRoute(elevator);
-      //console.log('floor ' + floorNum + ' assigned to elevator ' + elevator.num);
-    }
-
-    function handleHallButtonPress(floorNum, direction) {
-      var noluck = true;
-      for (i = 0; i < elevators.length; i++) {
-        var elevator = elevators[i];
-        if (elevator.loadFactor() > 0.7) { continue; }
-        if (elevator.currentFloor() - 1 < floorNum && elevator.currentFloor() + 1 > floorNum ) { assignFloor(elevator, floorNum); noluck = false; break; }
-        if (elevator.destinationQueue.length >= 1) { continue; }
-        if (elevator.loadFactor() === 0) { assignFloor(elevator, floorNum); noluck = false; break; }
+    function buttonPressed(floorNum, direction) {
+      if (!q.some(function(f) {return f === floorNum})) {
+        q.push(floorNum);
       }
-      // random assignment
-      if (noluck) { assignFloor(elevators[(rotator++) % elevators.length], floorNum); }
     }
 
-    var rotator = 0;
     _.each(floors, function(floor) {
       floor.on("up_button_pressed down_button_pressed", function(event) {
         var direction = event.indexOf('up') == 0 ? 'up' : 'down';
-        handleHallButtonPress(floor.level, direction);
+        buttonPressed(floor.level, direction);
       });
     });
 
-    var num = 0;
     _.each(elevators, function(elevator) {
       elevator.num = num++;
-      elevator.on("floor_button_pressed", function(floorNum) {
-        elevator.goToFloor(floorNum);
-        sortQueueAndRoute(elevator);
-        //console.log('elevator ' + elevator.num + ' going to floor ' + floorNum);
-      });
-      //elevator.on("idle", function() { elevator.goToFloor(0); });
-    });
 
+      elevator.on("floor_button_pressed", function(floorNum) {
+        assignFloor(elevator, floorNum);
+      });
+
+      elevator.on("passing_floor", function(floorNum, direction) {
+        console.log('passing_floor ' + floorNum + ' by ' + elevator.num + ' going ' + direction);
+        if (elevator.loadFactor() <= 0.6) {
+          if ((floors[floorNum].buttonStates.down && direction == "down") || (floors[floorNum].buttonStates.up && direction == "up")) {
+            assignFloor(elevator, floorNum, true);
+          }
+        }
+      });
+
+      elevator.on("stopped_at_floor", function(floorNum) {
+        var s = q.indexOf(floorNum);
+        if (s >= 0) {
+          q.splice(s, 1);
+        }
+      });
+
+      elevator.on("idle", function() {
+        if (q.length) {
+          assignFloor(elevator, q.shift());
+        } else {
+          assignFloor(elevator, 0);
+        }
+      });
+
+    });
   },
   update: function(dt, elevators, floors) {
-    // We normally don't need to do anything here
   }
 }

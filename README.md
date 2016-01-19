@@ -1,4 +1,7 @@
-# elevatorsaga-12
-solution for elevator saga lvl 12
+# elevatorsaga
+solution for elevator saga
 
-Not tested against lower levels.  Fails on lvl 13+
+solves most levels.  can't complete 14 & 15.
+
+#todo
+working directional lights
